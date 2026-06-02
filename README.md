@@ -64,7 +64,10 @@ The pipeline generates several outputs in the `results/` directory:
 
 ## 🧠 Methodology
 
-For an end-to-end explanation of the filtering (F1, F2, F4) and the ranking algorithms, please see the [Pipeline Summary](docs/PIPELINE_SUMMARY.md) and [Ranking Logic](docs/RANKING_LOGIC.md).
+For an end-to-end explanation of the filtering (F1, F2, F4) and the ranking algorithms, please see:
+*   [Pipeline Summary](docs/PIPELINE_SUMMARY.md)
+*   [Ranking Logic (TOPSIS)](docs/RANKING_LOGIC.md)
+*   [Off-target Burden Calculation](docs/SPECIFICITY_CALCULATION.md)
 
 ## 📄 License
 
