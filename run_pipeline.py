@@ -28,7 +28,7 @@ def main():
     
     # Save Automatically Calculated Weights
     weights_df = pd.DataFrame(list(processor.calculated_weights.items()), columns=['Criteria', 'Automated_Weight'])
-    weights_df.to_csv(os.path.join(TABLES_DIR, 'ranking_weights.csv'), index=False)
+    weights_df.to_csv(os.path.join(TABLES_DIR, 'all_cell_types_ranking_weights.csv'), index=False)
     
     logfc_cols = sorted([c for c in df.columns if isinstance(c, str) and 'logFC' in c])
     display_cols = ['Rank', 'Gene', 'Cell Type'] + logfc_cols + ['logCPM', 'FDR', 'Score', 'Status', 'Dropped Reason']
@@ -39,7 +39,7 @@ def main():
     df_display = df_display[display_cols]
     
     # Save unified results
-    df_display.to_csv(os.path.join(TABLES_DIR, 'all_pipeline_results.csv'), index=False)
+    df_display.to_csv(os.path.join(TABLES_DIR, 'all_cell_types_results_summary.csv'), index=False)
     
     # Save split results for passed candidates
     passed_mask = df_display['Status'] == 'PASS'
@@ -48,8 +48,21 @@ def main():
     up = df_display[passed_mask & (df[logfc_ref] > 0)].sort_values('Score', ascending=False)
     down = df_display[passed_mask & (df[logfc_ref] < 0)].sort_values('Score', ascending=False)
     
-    up.to_csv(os.path.join(TABLES_DIR, 'candidates_upregulation.csv'), index=False)
-    down.to_csv(os.path.join(TABLES_DIR, 'candidates_downregulation.csv'), index=False)
+    up.to_csv(os.path.join(TABLES_DIR, 'all_cell_types_candidates_upregulation.csv'), index=False)
+    down.to_csv(os.path.join(TABLES_DIR, 'all_cell_types_candidates_downregulation.csv'), index=False)
+
+    # Save Individual Cell Type Tables
+    cell_types_tables_dir = os.path.join(TABLES_DIR, "cell_types")
+    os.makedirs(cell_types_tables_dir, exist_ok=True)
+    
+    for cell_type in df_display['Cell Type'].unique():
+        cell_df = df_display[df_display['Cell Type'] == cell_type].copy()
+        # Sort by Rank (Score)
+        cell_df['Rank_int'] = pd.to_numeric(cell_df['Rank'], errors='coerce').fillna(999999)
+        cell_df = cell_df.sort_values('Rank_int').drop(columns=['Rank_int'])
+        
+        safe_name = cell_type.replace('/', '_').replace(' ', '_')
+        cell_df.to_csv(os.path.join(cell_types_tables_dir, f'results_{safe_name}.csv'), index=False)
 
     print("\n" + "="*30)
     print("Modular Pipeline Execution Successful")

@@ -149,5 +149,5 @@ cython_debug/
 .DS_Store
 
 # Large Data & Results
-# results/  <-- Uncomment if you don't want to commit results
+results/
 # data.xlsx <-- Uncomment if data should remain private

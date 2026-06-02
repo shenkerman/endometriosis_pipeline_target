@@ -53,8 +53,13 @@ python3 run_pipeline.py
 ## 📊 Outputs
 
 The pipeline generates several outputs in the `results/` directory:
-*   **Tables:** Unified and direction-specific candidate lists, including TOPSIS scores.
-*   **Plots:** Ectopic-vs-Eutopic scatter plots, status distribution, and candidate heatmaps.
+*   **Tables:**
+    *   `tables/all_pipeline_results.csv`: Unified summary of all genes.
+    *   `tables/cell_types/`: Individual results for each subpopulation (dS2, Prv-CCL19, etc.).
+*   **Plots:**
+    *   `plots/ectopic_vs_eutopic_scatter.png`: Global comparison with Top 10 labels.
+    *   `plots/cell_types/`: Individual scatter plots for each cell type, labeling top candidates.
+    *   `plots/top_100_candidates_heatmap.png`: High-resolution expression profiles.
 *   **Documentation:** Detailed mathematical rationale in `docs/RANKING_LOGIC.md`.
 
 ## 🧠 Methodology
