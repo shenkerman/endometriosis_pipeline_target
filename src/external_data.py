@@ -132,6 +132,13 @@ class ExternalDataManager:
                 uterus_tpm = tpm
                 break
 
+        if uterus_tpm == 0.0:
+            # Edge case: gene has no uterus expression in GTEx (e.g. HAPLN1).
+            # Ratio falls back to log2(TPM+1) — NOT uterus-normalized.
+            # Value is comparable to absolute expression, not relative burden.
+            print(f"    ! {gene_symbol}: uterus TPM = 0 in GTEx. "
+                  f"gtex_burden_vs_uterus = log2(TPM+1), NOT uterus-normalized.")
+
         ratios = []
         for tissue_id, tpm in tissue_tpm.items():
             is_reproductive = any(
@@ -225,7 +232,7 @@ class ExternalDataManager:
     # ------------------------------------------------------------------ #
     def fetch_batch_specificity(self, gene_list):
         """
-        Returns {gene: {'gtex_burden': float, 'cellxgene_burden': float}}
+        Returns {gene: {'gtex_burden_vs_uterus': float, 'cellxgene_burden': float}}
         GTEx: fetched gene-by-gene with JSON cache.
         CellxGene: fetched in one batch via Census API with pickle cache.
         """
@@ -238,7 +245,7 @@ class ExternalDataManager:
         for i, gene in enumerate(gene_list, 1):
             print(f"  [{i}/{total}] GTEx: {gene}")
             results[gene] = {
-                'gtex_burden':      self.get_off_target_burden(gene),
-                'cellxgene_burden': self.get_cellxgene_burden(gene),
+                'gtex_burden_vs_uterus': self.get_off_target_burden(gene),
+                'cellxgene_burden':      self.get_cellxgene_burden(gene),
             }
         return results

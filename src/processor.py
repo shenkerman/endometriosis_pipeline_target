@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from .config import (CELL_TYPES_INFO, ENABLE_EXTERNAL_SPECIFICITY, TOP_N_FOR_EXTERNAL,
-                     CPM_PERCENTILE_THRESHOLD, EUE_NEAR_ZERO_THRESHOLD, ENABLE_CELLXGENE)
+                     CPM_PERCENTILE_THRESHOLD, ENABLE_CELLXGENE)
 from .external_data import ExternalDataManager
 
 
@@ -117,23 +117,24 @@ class PipelineDataProcessor:
         """
         Adds:
         - CPM: back-transformed from logCPM (2^logCPM), rounded to 2 decimal places
-        - CPM_percentile: rank percentile within the passed gene set (0-1)
-        - EuE_near_zero: True if |EuE logFC| < EUE_NEAR_ZERO_THRESHOLD (flag for manual review)
+        - CPM_percentile: rank percentile within each cell type (not cross-cell-type)
         """
         df = df.copy()
 
         # CPM back-transform
         df['CPM'] = (2 ** pd.to_numeric(df['logCPM'], errors='coerce')).round(2)
 
-        # CPM percentile within the current result set
-        df['CPM_percentile'] = pd.to_numeric(df['CPM'], errors='coerce').rank(pct=True).round(3)
-
-        # EuE near-zero flag
-        eue_col = 'logFC.eueVSctrl'
-        if eue_col in df.columns:
-            df['EuE_near_zero'] = pd.to_numeric(df[eue_col], errors='coerce').abs() < EUE_NEAR_ZERO_THRESHOLD
+        # CPM percentile within each cell type (not cross-cell-type)
+        # Different cell types have very different baseline CPMs (e.g. cDC2 ~149 vs Treg ~367),
+        # so cross-cell-type ranking would be misleading as a tiebreaker.
+        if 'Cell Type' in df.columns:
+            df['CPM_percentile'] = (
+                df.groupby('Cell Type')['CPM']
+                .transform(lambda x: pd.to_numeric(x, errors='coerce').rank(pct=True))
+                .round(3)
+            )
         else:
-            df['EuE_near_zero'] = np.nan
+            df['CPM_percentile'] = pd.to_numeric(df['CPM'], errors='coerce').rank(pct=True).round(3)
 
         return df
 
@@ -151,7 +152,7 @@ class PipelineDataProcessor:
         both are valid biomarker profiles.
 
         Stage 2 (External): Refines top TOP_N_FOR_EXTERNAL genes with:
-            gtex_burden      = max log2((TPM_off_target+1)/(TPM_uterus+1))
+            gtex_burden_vs_uterus = max log2((TPM_off_target+1)/(TPM_uterus+1))
             cellxgene_burden = max % cells expressing across non-reproductive tissues
         Both are minimize criteria. No penalty for genes outside top N.
         """
@@ -186,14 +187,14 @@ class PipelineDataProcessor:
             top_genes    = passed.sort_values('Local_Score', ascending=False)['Gene'].unique()[:TOP_N_FOR_EXTERNAL]
             external_raw = self.external_manager.fetch_batch_specificity(top_genes)
 
-            passed['gtex_burden']      = passed['Gene'].map({g: v['gtex_burden']      for g, v in external_raw.items()})
-            passed['cellxgene_burden'] = passed['Gene'].map({g: v['cellxgene_burden'] for g, v in external_raw.items()})
+            passed['gtex_burden_vs_uterus'] = passed['Gene'].map({g: v['gtex_burden_vs_uterus'] for g, v in external_raw.items()})
+            passed['cellxgene_burden']      = passed['Gene'].map({g: v['cellxgene_burden']      for g, v in external_raw.items()})
 
-            refined = passed[passed['gtex_burden'].notna()].copy()
-            other   = passed[passed['gtex_burden'].isna()].copy()
+            refined = passed[passed['gtex_burden_vs_uterus'].notna()].copy()
+            other   = passed[passed['gtex_burden_vs_uterus'].isna()].copy()
 
             if not refined.empty:
-                off_target_cols = ['gtex_burden']
+                off_target_cols = ['gtex_burden_vs_uterus']
                 if ENABLE_CELLXGENE and refined['cellxgene_burden'].notna().any():
                     off_target_cols.append('cellxgene_burden')
 
@@ -209,11 +210,11 @@ class PipelineDataProcessor:
 
                 # off_target_agree: True if GTEx and CellxGene agree on risk level
                 if 'cellxgene_burden' in off_target_cols:
-                    gtex_med = refined['gtex_burden'].median()
+                    gtex_med = refined['gtex_burden_vs_uterus'].median()
                     cxg_med  = refined['cellxgene_burden'].median()
                     refined['off_target_agree'] = (
-                        ((refined['gtex_burden'] < gtex_med) & (refined['cellxgene_burden'] < cxg_med)) |
-                        ((refined['gtex_burden'] >= gtex_med) & (refined['cellxgene_burden'] >= cxg_med))
+                        ((refined['gtex_burden_vs_uterus'] < gtex_med) & (refined['cellxgene_burden'] < cxg_med)) |
+                        ((refined['gtex_burden_vs_uterus'] >= gtex_med) & (refined['cellxgene_burden'] >= cxg_med))
                     )
 
                 # V2: no penalty for genes outside top N — they keep their local score
@@ -229,8 +230,8 @@ class PipelineDataProcessor:
         passed = self._add_derived_columns(passed)
 
         # -- Backward compat alias for visualizer --
-        if 'gtex_burden' in passed.columns:
-            passed['off_target_burden'] = passed['gtex_burden']
+        if 'gtex_burden_vs_uterus' in passed.columns:
+            passed['off_target_burden'] = passed['gtex_burden_vs_uterus']
 
         # -- Final sort: top 15% CPM first, then by Score within each group --
         high_cpm    = passed['CPM_percentile'] >= CPM_PERCENTILE_THRESHOLD

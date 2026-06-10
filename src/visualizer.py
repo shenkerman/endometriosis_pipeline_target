@@ -6,15 +6,15 @@ from .config import PLOTS_DIR
 
 # Human-readable column name mapping for display in plots
 COL_LABELS = {
-    'logFC.eueVSctrl':  'EuE',
-    'logFC.ecpVSctrl':  'EcP',
-    'logFC.ecoVSctrl':  'EcO',
-    'logFC.ecpaVSctrl': 'EcPA',
-    'specificity_ecp':  '|EcP - EuE|',
-    'specificity_eco':  '|EcO - EuE|',
-    'gtex_burden':      'GTEx off-target',
-    'off_target_burden':'GTEx off-target',
-    'cellxgene_burden': 'CellxGene off-target',
+    'logFC.eueVSctrl':      'EuE',
+    'logFC.ecpVSctrl':      'EcP',
+    'logFC.ecoVSctrl':      'EcO',
+    'logFC.ecpaVSctrl':     'EcPA',
+    'specificity_ecp':      '|EcP - EuE|',
+    'specificity_eco':      '|EcO - EuE|',
+    'gtex_burden_vs_uterus':'GTEx off-target',
+    'off_target_burden':    'GTEx off-target',
+    'cellxgene_burden':     'CellxGene off-target',
 }
 
 
@@ -88,8 +88,8 @@ class PipelineVisualizer:
 
         plt.title('Ectopic vs Eutopic Expression — All Cell Types\n(Top 10 candidates labeled)',
                   fontsize=15)
-        plt.xlabel('EuE logFC (eutopic endometrium vs healthy control)', fontsize=12)
-        plt.ylabel('Mean Lesion logFC — mean(EcP, EcO) vs healthy control', fontsize=12)
+        plt.xlabel(r'EuE $\log_2$FC (eutopic endometrium vs healthy control)', fontsize=12)
+        plt.ylabel(r'Mean Lesion $\log_2$FC — mean(EcP, EcO) vs healthy control', fontsize=12)
         plt.axvline(0, color='grey', linestyle='--', alpha=0.5)
         plt.axhline(0, color='grey', linestyle='--', alpha=0.5)
         plt.tight_layout()
@@ -118,7 +118,7 @@ class PipelineVisualizer:
         """
         V2: X = |EcP - EuE| (peritoneal lesion specificity)
             Y = |EcO - EuE| (ovarian lesion specificity)
-            Color = GTEx off-target burden (log2 ratio vs uterus)
+            Color = GTEx off-target burden (log2 ratio vs uterus), clipped at 95th pct
             Size = TOPSIS Score
         Top-right quadrant + green = ideal candidate.
         """
@@ -133,8 +133,8 @@ class PipelineVisualizer:
             plot_df = self.passed.copy()
             x_col   = 'specificity_ecp'
             y_col   = 'specificity_eco'
-            x_label = '|EcP − EuE|  (peritoneal lesion specificity, log₂FC)'
-            y_label = '|EcO − EuE|  (ovarian lesion specificity, log₂FC)'
+            x_label = r'|EcP $-$ EuE|  (peritoneal lesion specificity, $\log_2$FC)'
+            y_label = r'|EcO $-$ EuE|  (ovarian lesion specificity, $\log_2$FC)'
             threshold = 1.0   # 2-fold in log2 space
         else:
             # Fall back to V1 style (no specificity columns computed)
@@ -145,19 +145,19 @@ class PipelineVisualizer:
             plot_df = self.passed.copy()
             x_col   = 'logFC.eueVSctrl'
             y_col   = 'Ectopic_Mean'
-            x_label = 'EuE logFC (eutopic endometrium vs control)'
-            y_label = 'Mean Lesion logFC — mean(EcP, EcO)'
+            x_label = r'EuE $\log_2$FC (eutopic endometrium vs control)'
+            y_label = r'Mean Lesion $\log_2$FC — mean(EcP, EcO)'
             threshold = None
 
         # Determine which off-target column to use for color
-        burden_col = None
+        burden_col   = None
         burden_label = ''
         for col, label in [
-            ('gtex_burden',      'Off-target burden\nmax log₂(GTEx / uterus TPM)'),
-            ('off_target_burden','Off-target burden\nmax log₂(GTEx / uterus TPM)'),
+            ('gtex_burden_vs_uterus', 'Off-target burden\n' + r'max $\log_2$(GTEx / uterus TPM)'),
+            ('off_target_burden',     'Off-target burden\n' + r'max $\log_2$(GTEx / uterus TPM)'),
         ]:
             if col in plot_df.columns and plot_df[col].notna().any():
-                burden_col  = col
+                burden_col   = col
                 burden_label = label
                 break
 
@@ -182,8 +182,12 @@ class PipelineVisualizer:
         )
 
         if burden_col:
-            scatter_kwargs['hue']     = burden_col
-            scatter_kwargs['palette'] = 'RdYlGn_r'   # Green = low off-target (good)
+            # Fix A: clip colorbar at 95th percentile so outliers don't stretch the scale
+            vmax = float(plot_df[burden_col].quantile(0.95))
+            plot_df['_burden_clipped'] = plot_df[burden_col].clip(upper=vmax)
+            scatter_kwargs['hue']      = '_burden_clipped'
+            scatter_kwargs['palette']  = 'RdYlGn_r'   # Green = low off-target (good)
+            scatter_kwargs['hue_norm'] = (0, vmax)
         else:
             scatter_kwargs['hue'] = 'Cell Type'
 
@@ -191,7 +195,7 @@ class PipelineVisualizer:
 
         # Add colorbar for off-target burden
         if burden_col:
-            norm = plt.Normalize(plot_df[burden_col].min(), plot_df[burden_col].max())
+            norm = plt.Normalize(0, vmax)
             sm   = plt.cm.ScalarMappable(cmap='RdYlGn_r', norm=norm)
             sm.set_array([])
             fig.colorbar(sm, ax=ax, label=burden_label, pad=0.02)
@@ -212,7 +216,8 @@ class PipelineVisualizer:
         ax.axhline(0, color='grey', linestyle='--', alpha=0.4, linewidth=0.8)
         if threshold is not None:
             ax.axvline(threshold, color='steelblue', linestyle=':', alpha=0.5,
-                       linewidth=1, label=f'2-fold threshold (log₂FC = {threshold})')
+                       linewidth=1,
+                       label=r'2-fold threshold ($\log_2$FC = ' + str(threshold) + ')')
             ax.axhline(threshold, color='steelblue', linestyle=':', alpha=0.5, linewidth=1)
 
         ax.set_title(
@@ -243,7 +248,20 @@ class PipelineVisualizer:
         display_cols = spec_cols if spec_cols else logfc_cols
         has_burden   = 'off_target_burden' in top_n.columns and top_n['off_target_burden'].notna().any()
 
-        top_n['Label'] = top_n['Gene'] + '  (' + top_n['Cell Type'] + ')'
+        # Fix B: direction from mean lesion logFC — specificity distances are absolute, sign is lost
+        ecp_vals = pd.to_numeric(
+            top_n.get('logFC.ecpVSctrl', pd.Series(0, index=top_n.index)), errors='coerce'
+        ).fillna(0)
+        eco_vals = pd.to_numeric(
+            top_n.get('logFC.ecoVSctrl', pd.Series(0, index=top_n.index)), errors='coerce'
+        ).fillna(0)
+        top_n['_mean_lesion'] = (ecp_vals + eco_vals) / 2
+
+        # ↑ green = upregulated in lesion vs control; ↓ red = downregulated
+        top_n['Label'] = top_n.apply(
+            lambda r: ('↑ ' if r['_mean_lesion'] > 0 else '↓ ') + r['Gene'] + '  (' + r['Cell Type'] + ')',
+            axis=1
+        )
 
         # Rename columns for display
         rename_map = {c: COL_LABELS.get(c, c) for c in display_cols}
@@ -255,31 +273,57 @@ class PipelineVisualizer:
             )
             data1 = top_n.set_index('Label')[display_cols].rename(columns=rename_map).apply(pd.to_numeric).fillna(0)
             sns.heatmap(data1, annot=show_annot, fmt='.2f', cmap='YlOrRd', ax=ax1,
-                        cbar_kws={'label': 'Specificity distance (|logFC|)'})
-            ax1.set_title('Lesion Specificity (log₂FC)', fontsize=13)
+                        cbar_kws={'label': r'Specificity distance (|$\log_2$FC|)'})
+            # Fix C: math notation for log₂FC (replaces Unicode ₂ that renders as □)
+            ax1.set_title(r'Lesion Specificity ($\log_2$FC)', fontsize=13)
             ax1.set_ylabel('')
 
+            # Fix B: colour ytick labels by direction
+            for tick_label in ax1.get_yticklabels():
+                text = tick_label.get_text()
+                if text.startswith('↑'):
+                    tick_label.set_color('#2ca02c')   # green
+                elif text.startswith('↓'):
+                    tick_label.set_color('#d62728')   # red
+
             data2 = top_n.set_index('Label')[['off_target_burden']].rename(
-                columns={'off_target_burden': 'GTEx off-target\n(log₂ ratio vs uterus)'}
+                columns={'off_target_burden': 'GTEx off-target\n' + r'($\log_2$ vs uterus)'}
             ).apply(pd.to_numeric).fillna(0)
+            # Fix A: anchor vmin at 0 (values already clipped ≥ 0 by external_data.py)
+            vmax_burden = max(float(data2.values.max()), 0.01)
             sns.heatmap(data2, annot=show_annot, fmt='.2f', cmap='magma_r', ax=ax2,
-                        cbar_kws={'label': 'log₂ off-target ratio'}, yticklabels=False)
+                        vmin=0, vmax=vmax_burden,
+                        cbar_kws={'label': r'$\log_2$ off-target ratio'}, yticklabels=False)
             ax2.set_title('Off-Target Burden\n(GTEx, uterus-normalized)', fontsize=13)
             ax2.set_ylabel('')
+            # Fix E: one explanatory line below GTEx panel
+            ax2.set_xlabel(
+                r'max $\log_2$(TPM in tissue / TPM in uterus)  ·  Source: GTEx v8 (public atlas)',
+                fontsize=8, labelpad=6
+            )
 
+            # Fix D: informative suptitle — no source citation
             plt.suptitle(
-                f'Integrated Biomarker Profile — Top {n_top} Candidates\n'
-                'Source: Tan et al. 2022 (Supp. Table 5) | Off-target: GTEx v8',
+                f'Differentially expressed genes in endometriosis lesions — Top {n_top} candidates\n'
+                'Ranked by divergence from healthy endometrium (compared with healthy controls)',
                 fontsize=15, y=1.01
             )
         else:
             heatmap_data = top_n.set_index('Label')[display_cols].rename(columns=rename_map).apply(pd.to_numeric).fillna(0)
-            plt.figure(figsize=(10, 0.5 * min(n_top, 50) + 2))
-            sns.heatmap(heatmap_data, annot=show_annot, fmt='.2f', cmap='YlOrRd',
-                        cbar_kws={'label': 'Specificity distance (|logFC|)'})
-            plt.title(
-                f'Lesion Specificity Profile — Top {n_top} Candidates\n'
-                'Source: Tan et al. 2022 (Supp. Table 5)',
+            fig, ax = plt.subplots(figsize=(10, 0.5 * min(n_top, 50) + 2))
+            sns.heatmap(heatmap_data, annot=show_annot, fmt='.2f', cmap='YlOrRd', ax=ax,
+                        cbar_kws={'label': r'Specificity distance (|$\log_2$FC|)'})
+            # Fix B: colour ytick labels by direction
+            for tick_label in ax.get_yticklabels():
+                text = tick_label.get_text()
+                if text.startswith('↑'):
+                    tick_label.set_color('#2ca02c')
+                elif text.startswith('↓'):
+                    tick_label.set_color('#d62728')
+            # Fix D: informative title — no source citation
+            ax.set_title(
+                f'Differentially expressed genes in endometriosis lesions — Top {n_top} candidates\n'
+                'Ranked by divergence from healthy endometrium (compared with healthy controls)',
                 fontsize=14
             )
 

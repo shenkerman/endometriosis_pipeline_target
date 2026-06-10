@@ -150,7 +150,7 @@ Weights are computed via entropy weighting, applied to the specificity distances
 
 | Metric | Source | What it measures |
 |--------|--------|-----------------|
-| `gtex_burden` | GTEx API (v8) | max log2((TPM_off-target + 1) / (TPM_uterus + 1)) across non-reproductive tissues |
+| `gtex_burden_vs_uterus` | GTEx API (v8) | max log2((TPM_off-target + 1) / (TPM_uterus + 1)) across non-reproductive tissues |
 | `cellxgene_burden` | CellxGene Census API | max % cells expressing the gene across non-reproductive healthy tissues (disease = normal, is_primary_data = True) |
 
 GTEx metric uses uterus as reference so values are normalized per gene's baseline reproductive expression. Negative ratios (gene is less expressed off-target than in uterus) are clipped to 0.
@@ -176,9 +176,9 @@ V1 used only the EcO column (alphabetically first), which incorrectly classified
 |--------|-------------|
 | `specificity_ecp` | \|EcP - EuE\| logFC |
 | `specificity_eco` | \|EcO - EuE\| logFC |
+| `gtex_burden_vs_uterus` | max log₂(TPM in off-target tissue / TPM in uterus) — clipped at 0; uterus-normalized GTEx off-target burden |
 | `CPM` | Back-transformed expression: 2^logCPM |
-| `CPM_percentile` | Rank percentile of CPM within the result set |
-| `EuE_near_zero` | True if \|EuE logFC\| < 0.5 — ambiguous eutopic signal, flag for review |
+| `CPM_percentile` | Rank percentile of CPM within each cell type (top 15% sorted first) |
 | `off_target_agree` | True if GTEx and CellxGene agree on risk level |
 
 Results are sorted with top-15%-by-CPM genes first within each score tier (high-confidence expression signal prioritized).
@@ -229,7 +229,6 @@ If `cellxgene-census` is not installed, CellxGene integration is skipped automat
 | 9 | UP/DOWN classification uses mean(EcP, EcO) | Fixes V1 bug where only EcO determined direction |
 | 10 | EcPA excluded from TOPSIS criteria | Adjacent peritoneum is neither lesion nor healthy control |
 | 11 | No penalty for genes outside TOP_N | Removes arbitrary 0.1x score multiplier from V1 |
-| 12 | `EuE_near_zero` flag column | Surfaces genes with ambiguous eutopic signal |
 
 ---
 

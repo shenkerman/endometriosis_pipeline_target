@@ -78,8 +78,8 @@ def main():
     # 3. Build display columns
     logfc_cols = sorted([c for c in df.columns if isinstance(c, str) and 'logFC' in c])
     v2_cols    = [c for c in ['specificity_ecp', 'specificity_eco',
-                               'gtex_burden', 'cellxgene_burden', 'off_target_agree',
-                               'CPM', 'logCPM', 'CPM_percentile', 'EuE_near_zero']
+                               'gtex_burden_vs_uterus', 'cellxgene_burden', 'off_target_agree',
+                               'CPM', 'logCPM', 'CPM_percentile']
                   if c in df.columns]
 
     display_cols = (
@@ -90,7 +90,7 @@ def main():
     )
 
     df_display = df.copy()
-    df_display['Rank'] = df_display['Rank'].apply(lambda x: f"{int(x)}" if pd.notna(x) else "")
+    df_display['Rank'] = pd.to_numeric(df_display['Rank'], errors='coerce').astype('Int64')
     for col in display_cols:
         if col not in df_display.columns:
             df_display[col] = np.nan
@@ -113,11 +113,11 @@ def main():
         os.path.join(run_tables_dir, 'all_cell_types_results_summary.csv'), index=False)
 
     # External specificity validation table
-    if ENABLE_EXTERNAL_SPECIFICITY and 'gtex_burden' in df.columns:
+    if ENABLE_EXTERNAL_SPECIFICITY and 'gtex_burden_vs_uterus' in df.columns:
         val_cols = [c for c in ['Rank', 'Gene', 'Cell Type', 'Score', 'Local_Score',
                                  'specificity_ecp', 'specificity_eco',
-                                 'gtex_burden', 'cellxgene_burden', 'off_target_agree',
-                                 'logFC.eueVSctrl', 'CPM_percentile', 'EuE_near_zero']
+                                 'gtex_burden_vs_uterus', 'cellxgene_burden', 'off_target_agree',
+                                 'logFC.eueVSctrl', 'CPM_percentile']
                     if c in df_display.columns]
         df_display[df_display['Status'] == 'PASS'][val_cols].to_csv(
             os.path.join(run_tables_dir, 'all_cell_types_external_specificity_validation.csv'),
