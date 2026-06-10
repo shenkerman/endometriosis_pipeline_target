@@ -31,7 +31,6 @@ Supplementary Table 5: pseudo-bulk differential expression (edgeR glmQLFTest) pe
 │   └── visualizer.py      # Seaborn-based plotting
 ├── run_pipeline.py        # Entry point with CLI arguments
 ├── data.xlsx              # Primary DE dataset (Tan et al. 2022, Supp. Table 5)
-├── cellxgene_data.csv     # User-exported CellxGene off-target data (optional)
 ├── results/               # Auto-generated outputs (tables and plots)
 └── docs/                  # Detailed documentation
 ```
@@ -43,14 +42,34 @@ Supplementary Table 5: pseudo-bulk differential expression (edgeR glmQLFTest) pe
 ```bash
 git clone https://github.com/shenkerman/endometriosis_pipeline_target.git
 cd endometriosis_pipeline_target
+```
+
+**Option A - with CellxGene off-target support (Python 3.12 required):**
+
+```bash
+conda create -n endo_pipeline python=3.12 -y
+conda activate endo_pipeline
+pip install cellxgene-census matplotlib seaborn pandas numpy requests scipy openpyxl
+```
+
+**Option B - GTEx-only mode (any Python 3.8+):**
+
+```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+> `cellxgene-census` requires Python < 3.13. If you are on Python 3.13+, use Option A with conda.
+
 ---
 
 ## Usage
+
+Activate the environment first (if using conda):
+```bash
+conda activate endo_pipeline
+```
 
 Run on all cell types (default):
 ```bash
@@ -132,7 +151,7 @@ Weights are computed via entropy weighting, applied to the specificity distances
 | Metric | Source | What it measures |
 |--------|--------|-----------------|
 | `gtex_burden` | GTEx API (v8) | max log2((TPM_off-target + 1) / (TPM_uterus + 1)) across non-reproductive tissues |
-| `cellxgene_burden` | CellxGene (user CSV) | max % cells expressing the gene across non-reproductive healthy tissues |
+| `cellxgene_burden` | CellxGene Census API | max % cells expressing the gene across non-reproductive healthy tissues (disease = normal, is_primary_data = True) |
 
 GTEx metric uses uterus as reference so values are normalized per gene's baseline reproductive expression. Negative ratios (gene is less expressed off-target than in uterus) are clipped to 0.
 
@@ -145,8 +164,8 @@ Genes outside the top 200 retain their Stage 1 local score with no penalty (V1 a
 Output tables are split into upregulated and downregulated candidates based on:
 
 ```
-mean(EcP logFC, EcO logFC) > 0  ->  UP
-mean(EcP logFC, EcO logFC) < 0  ->  DOWN
+mean(EcP logFC, EcO logFC) > 0   ->  UP
+mean(EcP logFC, EcO logFC) <= 0  ->  DOWN  (includes genes at exactly 0)
 ```
 
 V1 used only the EcO column (alphabetically first), which incorrectly classified genes with strong EcP signal but weak EcO signal.
@@ -168,11 +187,17 @@ Results are sorted with top-15%-by-CPM genes first within each score tier (high-
 
 ## CellxGene Data
 
-CellxGene off-target integration reads from `cellxgene_data.csv` in the repo root. Export this file from the [CellxGene portal](https://cellxgene.cziscience.com) with disease = normal filter applied.
+CellxGene off-target integration uses the [CellxGene Census Python API](https://chanzuckerberg.github.io/cellxgene-census/) to fetch % cells expressing each gene across healthy non-reproductive tissues (`disease == 'normal'`, `is_primary_data == True`). Data is fetched in a single batch for all top-N candidates and cached locally in `.api_cache/cellxgene_cache.pkl`.
 
-Required columns: `Gene`, `Tissue`, `Percent_Cells`
+**Requirement:** `cellxgene-census` requires **Python < 3.13**. Install via conda:
 
-If the file is not present, CellxGene integration is skipped automatically and only GTEx is used.
+```bash
+conda create -n endo_pipeline python=3.12 -y
+conda activate endo_pipeline
+pip install cellxgene-census
+```
+
+If `cellxgene-census` is not installed, CellxGene integration is skipped automatically and only GTEx is used. The first Census fetch may take several minutes; subsequent runs use the local cache.
 
 ---
 
@@ -194,7 +219,7 @@ If the file is not present, CellxGene integration is skipped automatically and o
 | # | Change | Impact |
 |---|--------|--------|
 | 1 | Cell type runtime parameter (`--cell-type`) | Focus analysis on biologically relevant populations without editing code |
-| 2 | CellxGene off-target integration | Adds breadth metric alongside GTEx intensity metric |
+| 2 | CellxGene Census API off-target integration (replaces manual CSV export) | Adds breadth metric alongside GTEx intensity metric; fully automated via Python API |
 | 3 | GTEx metric: uterus-normalized log2 ratio (replaces raw TPM sum) | Comparable across genes; penalizes spikes over uterus baseline, not cumulative breadth |
 | 4 | `off_target_agree` column | Flags disagreement between GTEx and CellxGene for manual review |
 | 5 | CPM back-transform + percentile column | Interpretable expression level; top 15% sorted first |
