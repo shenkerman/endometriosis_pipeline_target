@@ -52,10 +52,12 @@ class PipelineVisualizer:
             if cell_df.empty:
                 continue
             original_passed = self.passed
-            self.passed = cell_df
-            safe_name = cell_type.replace('/', '_').replace(' ', '_')
-            self._generate_heatmap(20, f'cell_types/heatmap_{safe_name}.png', show_annot=True)
-            self.passed = original_passed
+            try:
+                self.passed = cell_df
+                safe_name = cell_type.replace('/', '_').replace(' ', '_')
+                self._generate_heatmap(20, f'cell_types/heatmap_{safe_name}.png', show_annot=True)
+            finally:
+                self.passed = original_passed
 
     # ------------------------------------------------------------------ #
     #  Scatter: Ectopic vs Eutopic (overview)
@@ -193,7 +195,9 @@ class PipelineVisualizer:
             sm   = plt.cm.ScalarMappable(cmap='RdYlGn_r', norm=norm)
             sm.set_array([])
             fig.colorbar(sm, ax=ax, label=burden_label, pad=0.02)
-            ax.get_legend().remove()
+            legend = ax.get_legend()
+            if legend is not None:
+                legend.remove()
 
         # Label top candidates
         top_n = min(10, len(plot_df))

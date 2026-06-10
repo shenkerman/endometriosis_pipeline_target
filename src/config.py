@@ -40,9 +40,8 @@ TARGET_TISSUES = ['Ovary', 'Uterus', 'Vagina', 'Fallopian Tube', 'Cervix Uteri']
 GTEX_UTERUS_TISSUE_ID = 'Uterus'     # Reference tissue for log2-ratio normalization
 
 # 6. CellxGene Configuration
-# User exports from CellxGene portal and places file here.
-# Required columns: Gene, Tissue, Percent_Cells
-CELLXGENE_DATA_PATH = "cellxgene_data.csv"
+# Data is fetched via the cellxgene-census Python API (requires Python < 3.13).
+# Install: conda create -n endo_pipeline python=3.12 && pip install cellxgene-census
 CELLXGENE_REPRODUCTIVE_TISSUES = [
     'uterus', 'ovary', 'vagina', 'fallopian tube', 'cervix', 'endometrium'
 ]

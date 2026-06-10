@@ -130,8 +130,10 @@ def main():
     eco_vals    = pd.to_numeric(df.get('logFC.ecoVSctrl', pd.Series(np.nan, index=df.index)), errors='coerce')
     mean_lesion = (ecp_vals + eco_vals) / 2
 
+    # Genes with mean_lesion > 0: upregulated in lesions vs control
+    # Genes with mean_lesion <= 0: downregulated or neutral (included in DOWN to avoid silent drops)
     up   = df_display[passed_mask & (mean_lesion > 0)].copy()
-    down = df_display[passed_mask & (mean_lesion < 0)].copy()
+    down = df_display[passed_mask & (mean_lesion <= 0)].copy()
     up.to_csv(os.path.join(run_tables_dir,   'all_cell_types_candidates_upregulation.csv'),   index=False)
     down.to_csv(os.path.join(run_tables_dir, 'all_cell_types_candidates_downregulation.csv'), index=False)
 

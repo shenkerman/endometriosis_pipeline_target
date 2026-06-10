@@ -67,9 +67,12 @@ class PipelineDataProcessor:
     @staticmethod
     def _calculate_entropy_weights(matrix):
         """Calculates weights using the Entropy Weighting Method."""
+        n = matrix.shape[0]
+        # Entropy is undefined for a single row (log(1)=0); fall back to equal weights
+        if n <= 1:
+            return np.ones(matrix.shape[1]) / matrix.shape[1]
         matrix = np.abs(matrix) + 1e-9
         p = matrix / matrix.sum(axis=0)
-        n = matrix.shape[0]
         k = 1.0 / np.log(n)
         entropy = -k * np.nan_to_num(p * np.log(p)).sum(axis=0)
         d = 1.0 - entropy
