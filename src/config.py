@@ -11,7 +11,6 @@ TOP_N_FOR_EXTERNAL = 200              # Raised from 50 in V1
 
 # 2. Expression Thresholds
 CPM_PERCENTILE_THRESHOLD = 0.85       # Top 15% by CPM = high-confidence expression
-EUE_NEAR_ZERO_THRESHOLD = 0.5         # |EuE logFC| < this -> flagged for manual review
 
 # 3. Dataset Configuration
 CELL_TYPES_INFO = [
@@ -42,6 +41,8 @@ GTEX_UTERUS_TISSUE_ID = 'Uterus'     # Reference tissue for log2-ratio normaliza
 # 6. CellxGene Configuration
 # Data is fetched via the cellxgene-census Python API (requires Python < 3.13).
 # Install: conda create -n endo_pipeline python=3.12 && pip install cellxgene-census
+CELLXGENE_CENSUS_VERSION   = "2025-11-08"   # Pin to stable release (avoids version warning)
+CELLXGENE_TIMEOUT_SECONDS  = 300            # Abort CellxGene fetch after 5 min if unresponsive
 CELLXGENE_REPRODUCTIVE_TISSUES = [
     'uterus', 'ovary', 'vagina', 'fallopian tube', 'cervix', 'endometrium'
 ]

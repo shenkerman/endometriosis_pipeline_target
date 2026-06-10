@@ -4,8 +4,10 @@ import json
 import pickle
 import numpy as np
 import pandas as pd
+import concurrent.futures
 from .config import (CACHE_DIR, TARGET_TISSUES, GTEX_UTERUS_TISSUE_ID,
-                     ENABLE_CELLXGENE, CELLXGENE_REPRODUCTIVE_TISSUES)
+                     ENABLE_CELLXGENE, CELLXGENE_REPRODUCTIVE_TISSUES,
+                     CELLXGENE_CENSUS_VERSION, CELLXGENE_TIMEOUT_SECONDS)
 
 
 class ExternalDataManager:
@@ -178,7 +180,7 @@ class ExternalDataManager:
         try:
             var_filter = " or ".join([f"feature_name == '{g}'" for g in to_fetch])
 
-            with cellxgene_census.open_soma() as census:
+            with cellxgene_census.open_soma(census_version=CELLXGENE_CENSUS_VERSION) as census:
                 adata = cellxgene_census.get_anndata(
                     census,
                     organism="Homo sapiens",
@@ -237,8 +239,23 @@ class ExternalDataManager:
         CellxGene: fetched in one batch via Census API with pickle cache.
         """
         # Pre-fetch CellxGene for all genes at once (single Census connection)
+        # Runs in a thread with a timeout so a slow/hung Census call doesn't block the pipeline.
         if ENABLE_CELLXGENE:
-            self._fetch_cellxgene_batch_api(gene_list)
+            to_fetch = [g for g in gene_list if g not in self.cellxgene_cache]
+            if to_fetch:
+                print(f"  CellxGene: fetching {len(to_fetch)} genes "
+                      f"(timeout: {CELLXGENE_TIMEOUT_SECONDS}s)...")
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(self._fetch_cellxgene_batch_api, gene_list)
+                    try:
+                        future.result(timeout=CELLXGENE_TIMEOUT_SECONDS)
+                    except concurrent.futures.TimeoutError:
+                        print(f"  ! CellxGene fetch timed out after {CELLXGENE_TIMEOUT_SECONDS}s. "
+                              "Proceeding without CellxGene data for this run.")
+                    except Exception as e:
+                        print(f"  ! CellxGene fetch error: {e}")
+            else:
+                print(f"  CellxGene: all {len(gene_list)} genes found in cache.")
 
         results = {}
         total = len(gene_list)

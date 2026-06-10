@@ -151,10 +151,11 @@ class PipelineDataProcessor:
         EcPA is excluded. Direction (up/down) does not affect ranking —
         both are valid biomarker profiles.
 
-        Stage 2 (External): Refines top TOP_N_FOR_EXTERNAL genes with:
+        Stage 2 (External, info-only): Fetches off-target data for top TOP_N_FOR_EXTERNAL genes:
             gtex_burden_vs_uterus = max log2((TPM_off_target+1)/(TPM_uterus+1))
-            cellxgene_burden = max % cells expressing across non-reproductive tissues
-        Both are minimize criteria. No penalty for genes outside top N.
+            cellxgene_burden      = max % cells expressing across non-reproductive tissues
+        These are stored as output columns for manual review but do NOT affect Score.
+        Final Score = Local_Score for all genes.
         """
         df = df.copy()
         passed  = df[df['Status'] == 'PASS'].copy()
@@ -181,50 +182,36 @@ class PipelineDataProcessor:
         passed['Local_Score'] = self._run_topsis(passed, local_criteria, local_weights)
         self.calculated_weights = {'Stage 1 (Local)': dict(zip(local_criteria, local_weights))}
 
-        # -- Stage 2: External validation --
+        # -- Stage 2: External data — informational only, does NOT affect ranking --
+        # GTEx and CellxGene burden columns are fetched for the top N genes and stored
+        # as output columns for manual review. Score remains Local_Score for all genes.
+        # Rationale: off-target data is on a different scale from lesion logFC and
+        # introduces cross-source normalization assumptions that should be a human
+        # decision, not an automated TOPSIS weight.
         if ENABLE_EXTERNAL_SPECIFICITY:
-            print(f"Stage 2: External validation for top {TOP_N_FOR_EXTERNAL} genes...")
+            print(f"Stage 2: Fetching external data for top {TOP_N_FOR_EXTERNAL} genes "
+                  f"(info only — does not change ranking)...")
             top_genes    = passed.sort_values('Local_Score', ascending=False)['Gene'].unique()[:TOP_N_FOR_EXTERNAL]
             external_raw = self.external_manager.fetch_batch_specificity(top_genes)
 
-            passed['gtex_burden_vs_uterus'] = passed['Gene'].map({g: v['gtex_burden_vs_uterus'] for g, v in external_raw.items()})
-            passed['cellxgene_burden']      = passed['Gene'].map({g: v['cellxgene_burden']      for g, v in external_raw.items()})
+            passed['gtex_burden_vs_uterus'] = passed['Gene'].map(
+                {g: v['gtex_burden_vs_uterus'] for g, v in external_raw.items()})
+            passed['cellxgene_burden'] = passed['Gene'].map(
+                {g: v['cellxgene_burden'] for g, v in external_raw.items()})
 
-            refined = passed[passed['gtex_burden_vs_uterus'].notna()].copy()
-            other   = passed[passed['gtex_burden_vs_uterus'].isna()].copy()
-
-            if not refined.empty:
-                off_target_cols = ['gtex_burden_vs_uterus']
-                if ENABLE_CELLXGENE and refined['cellxgene_burden'].notna().any():
-                    off_target_cols.append('cellxgene_burden')
-
-                full_criteria   = local_criteria + off_target_cols
-                full_matrix     = refined[full_criteria].apply(pd.to_numeric).fillna(0).values
-                refined_weights = self._calculate_entropy_weights(full_matrix)
-                self.calculated_weights['Stage 2 (Refined)'] = dict(zip(full_criteria, refined_weights))
-
-                refined['Score'] = self._run_topsis(
-                    refined, full_criteria, refined_weights,
-                    minimize_cols=off_target_cols
+            # off_target_agree: informational flag — True if GTEx and CellxGene agree on risk
+            has_gtex = passed['gtex_burden_vs_uterus'].notna().any()
+            has_cxg  = passed['cellxgene_burden'].notna().any()
+            if has_gtex and has_cxg:
+                gtex_med = passed['gtex_burden_vs_uterus'].median()
+                cxg_med  = passed['cellxgene_burden'].median()
+                passed['off_target_agree'] = (
+                    ((passed['gtex_burden_vs_uterus'] < gtex_med) & (passed['cellxgene_burden'] < cxg_med)) |
+                    ((passed['gtex_burden_vs_uterus'] >= gtex_med) & (passed['cellxgene_burden'] >= cxg_med))
                 )
 
-                # off_target_agree: True if GTEx and CellxGene agree on risk level
-                if 'cellxgene_burden' in off_target_cols:
-                    gtex_med = refined['gtex_burden_vs_uterus'].median()
-                    cxg_med  = refined['cellxgene_burden'].median()
-                    refined['off_target_agree'] = (
-                        ((refined['gtex_burden_vs_uterus'] < gtex_med) & (refined['cellxgene_burden'] < cxg_med)) |
-                        ((refined['gtex_burden_vs_uterus'] >= gtex_med) & (refined['cellxgene_burden'] >= cxg_med))
-                    )
-
-                # V2: no penalty for genes outside top N — they keep their local score
-                other['Score'] = other['Local_Score']
-
-                passed = pd.concat([refined, other])
-            else:
-                passed['Score'] = passed['Local_Score']
-        else:
-            passed['Score'] = passed['Local_Score']
+        # Ranking is based solely on Stage 1 lesion-specificity score
+        passed['Score'] = passed['Local_Score']
 
         # -- Add derived columns (CPM, percentile, EuE flag) --
         passed = self._add_derived_columns(passed)
