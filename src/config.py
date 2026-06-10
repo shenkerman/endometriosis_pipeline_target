@@ -1,44 +1,48 @@
 import os
 
 # ==========================================
-# CONFIGURATION
+# V2 CONFIGURATION
 # ==========================================
 
 # 1. External Data Toggles
-ENABLE_EXTERNAL_SPECIFICITY = False  # Toggle GTEx integration
-TOP_N_FOR_EXTERNAL = 50             # Limit external analysis to top candidates for speed
+ENABLE_EXTERNAL_SPECIFICITY = True    # GTEx integration (was False in V1)
+ENABLE_CELLXGENE = True               # CellxGene off-target integration
+TOP_N_FOR_EXTERNAL = 200              # Raised from 50 in V1
 
-# 2. Ranking Weights (Used only as initial baseline or if automated weighting is off)
-# Priority: logFC near 0 in EuE, high absolute logFC in lesions
-RANKING_WEIGHTS = {
-    'logFC.eueVSctrl': -2.0,
-    'logFC.ecpVSctrl': 1.0,
-    'logFC.ecoVSctrl': 1.0,
-    'logFC.ecpaVSctrl': 0.5,
-    'off_target_burden': -1.5  # Weight for GTEx-derived specificy (minimized)
-}
+# 2. Expression Thresholds
+CPM_PERCENTILE_THRESHOLD = 0.85       # Top 15% by CPM = high-confidence expression
+EUE_NEAR_ZERO_THRESHOLD = 0.5         # |EuE logFC| < this -> flagged for manual review
 
 # 3. Dataset Configuration
 CELL_TYPES_INFO = [
-    (0, 'dS2'), 
-    (10, 'Prv-CCL19'), 
-    (20, 'EC-tip'), 
-    (30, 'EC-aPCV'), 
-    (40, 'EC-PCV'), 
-    (50, 'Mɸ1-LYVE1'), 
-    (60, 'Mɸ4-infiltrated'), 
-    (70, 'cDC2'), 
-    (80, 'Treg'), 
+    (0,  'dS2'),
+    (10, 'Prv-CCL19'),
+    (20, 'EC-tip'),
+    (30, 'EC-aPCV'),
+    (40, 'EC-PCV'),
+    (50, 'Mɸ1-LYVE1'),
+    (60, 'Mɸ4-infiltrated'),
+    (70, 'cDC2'),
+    (80, 'Treg'),
     (90, 'B cell')
 ]
 
 # 4. Directory Structure
 OUTPUT_DIR = "results"
 TABLES_DIR = os.path.join(OUTPUT_DIR, "tables")
-PLOTS_DIR = os.path.join(OUTPUT_DIR, "plots")
-RUNS_DIR = os.path.join(OUTPUT_DIR, "runs")
-CACHE_DIR = ".api_cache"
+PLOTS_DIR  = os.path.join(OUTPUT_DIR, "plots")
+RUNS_DIR   = os.path.join(OUTPUT_DIR, "runs")
+CACHE_DIR  = ".api_cache"
 
-# 5. GTEx Specific Configuration
-# Tissues to EXCLUDE from "Off-target Burden" calculation (considered target-adjacent or ovary)
+# 5. GTEx Configuration
+# Tissues excluded from off-target burden (reproductive/target-adjacent)
 TARGET_TISSUES = ['Ovary', 'Uterus', 'Vagina', 'Fallopian Tube', 'Cervix Uteri']
+GTEX_UTERUS_TISSUE_ID = 'Uterus'     # Reference tissue for log2-ratio normalization
+
+# 6. CellxGene Configuration
+# User exports from CellxGene portal and places file here.
+# Required columns: Gene, Tissue, Percent_Cells
+CELLXGENE_DATA_PATH = "cellxgene_data.csv"
+CELLXGENE_REPRODUCTIVE_TISSUES = [
+    'uterus', 'ovary', 'vagina', 'fallopian tube', 'cervix', 'endometrium'
+]
